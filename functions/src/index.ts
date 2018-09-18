@@ -18,15 +18,21 @@ export const helloWorld = functions.https.onRequest((request, response) => {
 export  const searchPlace = functions.https.onRequest( (req,res) => {
   CORS( req , res , async () => {
     try{
-      const { key , text , location , radius } = req.query;
+      const query = req.query;
+
       const config = {
-         params : {
-             query:text,
-             key:key,
-             location:location,
-             radius:radius
-         }
-       }
+           params : {
+              ...query
+           }
+      }
+      // const config = {
+      //    params : {
+      //        query:text,
+      //        key:key,
+      //        location:location,
+      //        radius:radius
+      //    }
+      //  }
       const result = await axios.get(_GOOGLE_TEXTSEARCH_URL,config);
       res.send(result.data);  
       } catch(error) {
