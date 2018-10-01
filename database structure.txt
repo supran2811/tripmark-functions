@@ -1,0 +1,41 @@
+
+//////////// POPULARITY COUNT ///////////////////
+
+/popular-cities
+	/cityid
+		/bookmarkCount
+		
+/popular-places
+	/placeid
+	/cityids
+	/bookmarkCount
+		
+
+//////////// SAVING BOOKMARKS ///////////////////
+
+
+-userid
+-city
+-place
+
+/users
+	/userid
+		/cities
+			/id
+			/name
+			/thumbnailImageurl
+			/places	
+				/id
+				/name
+				/thumbnailImageurl
+				/rating
+					
+					
+	
+
+	
+
+
+
+
+

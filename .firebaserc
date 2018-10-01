@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "triporg-1508486982436"
+    "default": "triporg-1508486982436",
+    "development": "triporg-1508486982436"
   }
 }
