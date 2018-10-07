@@ -11,12 +11,13 @@ const db = admin.firestore();
 
 const _GOOGLE_TEXTSEARCH_URL = "https://maps.googleapis.com/maps/api/place/textsearch/json";
 const _GOOGLE_AUTOSEARCH_URL = "https://maps.googleapis.com/maps/api/place/autocomplete/json";
+const _GOOGLE_PLACEDETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json";
 
 const CORS = require('cors')({origin:true});
 
 //// userid , 
-//// city : { id , name , thumbnailUrl, location:{lat:'',lng:''}}
-//// place : {id , name ,rating , thumbnailUrl , location:{lat:'',lng:''}}};
+//// city : { place_id , name , thumbnailUrl, location:{lat:'',lng:''}}
+//// place : {place_id , name ,rating , thumbnailUrl , location:{lat:'',lng:''}}};
 //// 
 export const addBookmarkPlace = functions.https.onRequest(async (req,res) => {
     try
@@ -26,15 +27,17 @@ export const addBookmarkPlace = functions.https.onRequest(async (req,res) => {
       const cityDocRef = db.collection('users')
                             .doc(userid)
                             .collection('cities')
-                            .doc(city.id);
+                            .doc(city['place_id']);
 
-      const cityRef = await cityDocRef.get();
+      let cityRef = await cityDocRef.get();
 
       !cityRef.exists && await cityDocRef.set(city);
       
       await cityDocRef.collection('places')
-                          .doc(place.id)
+                          .doc(place['place_id'])
                           .set(place);
+
+
       res.send(200);
     }catch(error) {
       res.send(error);
@@ -45,7 +48,7 @@ export const addBookmarkPlace = functions.https.onRequest(async (req,res) => {
 export const removeBookmarkPlace = functions.https.onRequest( async (req,res) => {
     try
     {
-        const { userid , cityid , placeid } = req.body;
+        const { userid , cityid , placeid } = req.query;
         const cityDocRef = db.collection("users")
                               .doc(userid)
                               .collection('cities')
@@ -73,9 +76,10 @@ export const getBookmarks = functions.https.onRequest( async (req , res) => {
   try{
       const userid = req.query.userid;
       const citiesRef = await db.collection('users').doc(userid).collection('cities').get();
-      const cities = [];
+      let cities = {};
       citiesRef.forEach(city => {
-          cities.push(city.data());
+          const cityData = city.data();
+          cities = { ...cities , [cityData.place_id]:cityData }
       });
       res.send(cities);
   }catch(error) {
@@ -93,9 +97,10 @@ export const getBookmarkPlaces = functions.https.onRequest( async (req , res) =>
                                 .collection('cities')
                                 .doc(cityid)
                                 .collection('places').get();
-      const places = [];
+      let places = {};
       placesRef.forEach(place => {
-        places.push(place.data());
+         const placeData = place.data();
+         places = { ...places , [placeData.place_id] : placeData }
       });
       res.send(places);
   }catch(error) {
@@ -148,3 +153,53 @@ export const autoCompleteSearch =  functions.https.onRequest( (req , res) => {
 } );
 
 
+////This is to check if place id already bookmarked
+export const isPlaceBookmarked = functions.https.onRequest( async (req,res) => {
+  const { userid , cityid , placeid } = req.query;
+  const isMarked = await _isPlaceBookmarked( userid , cityid , placeid);
+  res.send(isMarked);
+});
+
+//// This is for getting details of place using google api
+export const getPlaceDetails = functions.https.onRequest ( (req,res) => {
+  CORS(req , res , async () => {
+    const { key , placeid , cityid , userid } = req.query;
+    const config = {
+      params : {
+          key,
+          placeid
+      }
+    };
+    const result = await axios.get(_GOOGLE_PLACEDETAILS_URL,config);
+    let isMarked = false;
+    if(userid && cityid) {
+      isMarked = await _isPlaceBookmarked( userid , cityid , placeid);
+    }
+
+    const finalResult = {...result.data , bookmarked:isMarked};
+    
+    res.send(finalResult);
+  })
+});
+
+/// This is a provate function to check is place is bookmarked
+const _isPlaceBookmarked = async function(userid , cityid , placeid) {
+  if(userid && userid !== '' && 
+                cityid  && cityid !== '' && 
+                placeid && placeid !== '') {
+    const cityDocRef = db.collection("users")
+    .doc(userid)
+    .collection('cities')
+    .doc(cityid);
+  
+    const placeDocRef = cityDocRef
+    .collection('places')
+    .doc(placeid);
+  
+    const placeRef = await placeDocRef.get();
+  
+    return placeRef.exists;
+  }
+  return false;
+  
+}

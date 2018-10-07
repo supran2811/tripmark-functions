@@ -24,11 +24,13 @@
 			/id
 			/name
 			/thumbnailImageurl
+			/location
 			/places	
 				/id
 				/name
 				/thumbnailImageurl
 				/rating
+				/location
 					
 					
 	
