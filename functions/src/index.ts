@@ -92,16 +92,8 @@ export const getBookmarkPlaces = functions.https.onRequest( async (req , res) =>
       const userid = req.query.userid;
       const cityid = req.query.cityid;
 
-      const placesRef = await db.collection('users')
-                                .doc(userid)
-                                .collection('cities')
-                                .doc(cityid)
-                                .collection('places').get();
-      let places = {};
-      placesRef.forEach(place => {
-         const placeData = place.data();
-         places = { ...places , [placeData.place_id] : placeData }
-      });
+      const places = await _getBookmarkedPlacesInCity(userid,cityid);
+
       res.send(places);
   }catch(error) {
     res.send(error);
@@ -155,32 +147,81 @@ export const autoCompleteSearch =  functions.https.onRequest( (req , res) => {
 
 ////This is to check if place id already bookmarked
 export const isPlaceBookmarked = functions.https.onRequest( async (req,res) => {
-  const { userid , cityid , placeid } = req.query;
-  const isMarked = await _isPlaceBookmarked( userid , cityid , placeid);
-  res.send(isMarked);
+  try{
+    const { userid , cityid , placeid } = req.query;
+    const isMarked = await _isPlaceBookmarked( userid , cityid , placeid);
+    res.send(isMarked);
+  }catch(error) {
+    res.send(error);
+  }
+  
 });
 
 //// This is for getting details of place using google api
 export const getPlaceDetails = functions.https.onRequest ( (req,res) => {
   CORS(req , res , async () => {
-    const { key , placeid , cityid , userid } = req.query;
-    const config = {
-      params : {
+    try{
+      const { key , placeid , cityid , userid } = req.query;
+      const config = {
+        params : {
           key,
           placeid
+        }
+      };
+      const result = await axios.get(_GOOGLE_PLACEDETAILS_URL,config);
+      let isMarked = false;
+      if(userid && cityid) {
+        isMarked = await _isPlaceBookmarked( userid , cityid , placeid);
       }
-    };
-    const result = await axios.get(_GOOGLE_PLACEDETAILS_URL,config);
-    let isMarked = false;
-    if(userid && cityid) {
-      isMarked = await _isPlaceBookmarked( userid , cityid , placeid);
-    }
 
-    const finalResult = {...result.data , bookmarked:isMarked};
-    
-    res.send(finalResult);
+      const finalResult = {...result.data , bookmarked:isMarked};
+      
+      res.send(finalResult);
+    }catch(error) {
+      res.send(error);
+    }
   })
 });
+
+//// This is for getting details of city along with list of bookmarks using google api
+export const getCityDetails = functions.https.onRequest ( (req,res) => {
+  CORS(req , res , async () => {
+    try{
+      const { key ,cityid , userid } = req.query;
+      const config = {
+        params : {
+          key,
+          placeid:cityid,
+          fields:"name,geometry,photos,place_id"
+        }
+      };
+      const result = await axios.get(_GOOGLE_PLACEDETAILS_URL,config);
+      const places = await _getBookmarkedPlacesInCity(userid,cityid);
+      const finalResult = { ...result.data , places:places};
+      res.send(finalResult);
+    }catch(error) {
+      res.send(error);
+    }
+  })
+});
+
+
+const _getBookmarkedPlacesInCity = async function(userid,cityid) {
+  if(userid && cityid) {
+      const placesRef = await db.collection('users')
+                                .doc(userid)
+                                .collection('cities')
+                                .doc(cityid)
+                                .collection('places').get();
+      let places = {};
+      placesRef.forEach(place => {
+         const placeData = place.data();
+         places = { ...places , [placeData.place_id] : placeData }
+      });
+      return places;
+  }
+  return null;
+}
 
 /// This is a provate function to check is place is bookmarked
 const _isPlaceBookmarked = async function(userid , cityid , placeid) {
