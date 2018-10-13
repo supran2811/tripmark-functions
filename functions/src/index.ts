@@ -12,6 +12,7 @@ const db = admin.firestore();
 const _GOOGLE_TEXTSEARCH_URL = "https://maps.googleapis.com/maps/api/place/textsearch/json";
 const _GOOGLE_AUTOSEARCH_URL = "https://maps.googleapis.com/maps/api/place/autocomplete/json";
 const _GOOGLE_PLACEDETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json";
+const _GOOGLE_PHOTO_BASE_URL  = "https://maps.googleapis.com/maps/api/place/photo?maxheight=";
 
 const CORS = require('cors')({origin:true});
 
@@ -22,7 +23,7 @@ const CORS = require('cors')({origin:true});
 export const addBookmarkPlace = functions.https.onRequest(async (req,res) => {
     try
     {
-      const {userid , city , place}  = req.body;
+      const {userid , city , place , key}  = req.body;
       
       const cityDocRef = db.collection('users')
                             .doc(userid)
@@ -31,15 +32,28 @@ export const addBookmarkPlace = functions.https.onRequest(async (req,res) => {
 
       let cityRef = await cityDocRef.get();
 
-      !cityRef.exists && await cityDocRef.set(city);
-      
+      // !cityRef.exists && await cityDocRef.set(city);
+      if(!cityRef.exists) {
+        if(city['name']) {
+          await cityDocRef.set(city);
+        }
+        else if(key) {
+          const response = await _getCityDetails(key , city['place_id']);
+          const { place_id , name , geometry , photos } = response.data.result;
+          const cityToSave = {
+            place_id ,
+            name ,
+            location:{...geometry.location} ,
+            photoUrl: photos ? _getPhotoUrl(photos[0]["photo_reference"], 280,key) : null,
+          }
+          await cityDocRef.set(cityToSave);
+        }
+      }
       await cityDocRef.collection('places')
                           .doc(place['place_id'])
                           .set(place);
-
-
       res.send(200);
-    }catch(error) {
+    } catch(error) {
       res.send(error);
     }
 });
@@ -188,16 +202,9 @@ export const getCityDetails = functions.https.onRequest ( (req,res) => {
   CORS(req , res , async () => {
     try{
       const { key ,cityid , userid } = req.query;
-      const config = {
-        params : {
-          key,
-          placeid:cityid,
-          fields:"name,geometry,photos,place_id"
-        }
-      };
-      const result = await axios.get(_GOOGLE_PLACEDETAILS_URL,config);
+      const response = await _getCityDetails(key,cityid);
       const places = await _getBookmarkedPlacesInCity(userid,cityid);
-      const finalResult = { ...result.data , places:places};
+      const finalResult = { ...response.data , places:places};
       res.send(finalResult);
     }catch(error) {
       res.send(error);
@@ -242,5 +249,22 @@ const _isPlaceBookmarked = async function(userid , cityid , placeid) {
     return placeRef.exists;
   }
   return false;
-  
+}
+
+const _getCityDetails = async function(key , cityid) {
+  const config = {
+    params : {
+      key,
+      placeid:cityid,
+      fields:"name,geometry,photos,place_id"
+    }
+  };
+  const response = await axios.get(_GOOGLE_PLACEDETAILS_URL,config);
+  return response;
+}
+
+const _getPhotoUrl = function(photoReference, maxHeight , key) {
+  return `${_GOOGLE_PHOTO_BASE_URL}${maxHeight}&photoreference=${photoReference}&key=${
+    key
+  }`;
 }
