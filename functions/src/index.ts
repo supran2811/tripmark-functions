@@ -8,6 +8,8 @@ import axios from 'axios';
 admin.initializeApp(functions.config().firebase);
 
 const db = admin.firestore();
+const settings = {timestampsInSnapshots: true};
+db.settings(settings);
 
 const _GOOGLE_TEXTSEARCH_URL = "https://maps.googleapis.com/maps/api/place/textsearch/json";
 const _GOOGLE_AUTOSEARCH_URL = "https://maps.googleapis.com/maps/api/place/autocomplete/json";
@@ -30,9 +32,7 @@ export const addBookmarkPlace = functions.https.onRequest(async (req,res) => {
                             .collection('cities')
                             .doc(city['place_id']);
 
-      let cityRef = await cityDocRef.get();
-
-      // !cityRef.exists && await cityDocRef.set(city);
+      const cityRef = await cityDocRef.get();
       if(!cityRef.exists) {
         if(city['name']) {
           await cityDocRef.set(city);
